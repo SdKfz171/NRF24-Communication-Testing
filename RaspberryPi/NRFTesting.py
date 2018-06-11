@@ -35,14 +35,14 @@ if ser.isOpen():																			# 시리얼 포트를 열고
 				StartTime = datetime.datetime.strptime(result,'%Y-%m-%d %H:%M:%S.%f')		# 시작 시간 저장
 				break																		# 루프 탈툴
 	
-	while 1:
-		if ser.in_waiting:
-			result = ser.readline().decode('ascii')
-			print(result)
-			if not(result.find('STOP')):
-				StopTime = datetime.datetime.now()
-				SpendTime = StopTime - StartTime
-				print(SpendTime)
+	while 1:																				# 데이터 수신 루프 
+		if ser.in_waiting:																	# 수신 데이터가 있을 때 까지 기다림 
+			result = ser.readline().decode('ascii')											# 수신 데이터를 문자열로 전환
+			print(result)																	# 수신 데이터를 출력
+			if not(result.find('STOP')):													# STOP이란 응답을 받으면 
+				StopTime = datetime.datetime.now()											# 멈춘 시간을 저장
+				SpendTime = StopTime - StartTime											# 소요된 시간을 구하고 저장
+				print(SpendTime)															# 소요된 시간 출력
 
 
-ser.close()
+ser.close()																					# 시리얼 포트 닫기
