@@ -1,5 +1,11 @@
 import serial
 import datetime
+import sys
+from PyQt5 import QtWidgets
+from PyQt5 import uic
+from PyQt5 import QtGui
+from PyQt5 import QtCore
+from PyQt5.QtCore import pyqtSlot 
 
 StartTime = datetime.datetime.now()															# 시작 시간
 StopTime = datetime.datetime.now()															# 끝 시간
