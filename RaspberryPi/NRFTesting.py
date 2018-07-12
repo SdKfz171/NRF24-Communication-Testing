@@ -22,7 +22,7 @@ fd = open("Log%d.txt" % i,"wa")
 StartTime = datetime.datetime.now()															# 시작 시간
 StopTime = datetime.datetime.now()															# 끝 시간
 SpendTime = 0																				# 소요시간
- 
+
 ser = serial.Serial("COM3", 9600)															# 시리얼 포트 <= 라즈베리파이 포팅시 리눅스 포트방식으로 전환
 
 nowTime = ""																				# 스테이션으로 전송 할 시간 문자열
