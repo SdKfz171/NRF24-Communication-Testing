@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <NRF24.h>
 
-#define INFOSTAT 0
-#define INFONODE 1
+#define INFOSTAT 1
+#define INFONODE 0
 
 String StartTime;
 
@@ -93,7 +93,7 @@ void setup() {
 
 void loop() {
     // put your main code here, to run repeatedly:
-    uint8_t buf[32];
+    uint8_t _buf[32];
     int PacketCount = 0;
 
 #if INFOSTAT
@@ -101,7 +101,7 @@ void loop() {
         byte str[32];                           // 버퍼에서 불러 온 값을 저장 할 배열
         Serial.readBytes(str,32);               // 버퍼값 불러오기
         
-        digitalWrite(7,HIGH);                   
+        digitalWrite(7,LOW);
         
         String result = String((char*)str);     // 배열을 문자열 형태로 변형 (startsWith 함수 사용을 위해)
         
@@ -132,21 +132,36 @@ void loop() {
 
 #if INFOSTAT
     if(StationFlag == 1){
-        String packet = "START : ";
-        sprintf((char*)buf,"%s%04d",packet,Interval);
-        Serial.println((char*)buf);
-        packet.toCharArray((char *)buf,32);
-        Packet_Send(nrf24,"TX_01",buf);
-        
-        SetReceive(nrf);
+        while(1)
+        {
+            SetTransmit(nrf24);
+
+            char packet[] = "START : ";
+            sprintf((char*)_buf,"%s%04d", packet, Interval);
+            Serial.println((char*)_buf);
+            Packet_Send(nrf24,"TX_01",_buf);
+            
+            SetReceive(nrf24);
+
+            String NRFResult = (char *)Packet_Receive(nrf24,32);
+            if(NRFResult.startsWith("O")){          // 문자열이 O로 시작하는지 확인
+                if(NRFResult.startsWith("OK")){     // 문자열이 OK로 시작하는지 확인
+                    digitalWrite(7,HIGH);           //통신시작을 알리기 위해 LED HIGH
+                    Serial.print("OK : ");          // 응답
+                    Serial.println(Interval);  
+                     
+                    break;     
+                }        
+            }
+        }
+
+        //NODE 데이터 RECEIVE 시작
 
         while(1){    
             String NRFResult = (char *)Packet_Receive(nrf24,32);
-            if(NRFResult.startsWith("OK")){
-                StationFlag = 0;
-            }
-            else if(NRFResult.endsWith("1000")){
-                Serial.println("STOP");
+            if(NRFResult.startsWith("STOP")){ // STOP이면 시리얼에 STOP출력 후 LED BLINK
+                Serial.println(NRFResult); 
+                
                 break;
             }
             else if(NRFResult.startsWith("A")){
@@ -154,10 +169,18 @@ void loop() {
             }
         }
     }
+    while(1)
+    {
+        digitalWrite(7,LOW);
+        delay(500);
+        digitalWrite(7,HIGH);
+        delay(500);
+    }
 #endif
 
 #if INFONODE
-    while(1){
+    while(1)
+    {
         String NRFResult = (char *)Packet_Receive(nrf24,32);
         if(NRFResult.startsWith("S")){             // 문자열이 S로 시작하는지 확인 ==> 처음부터 START를 찾으니 못 찾는 경우가 종종 있었다.
             if(NRFResult.startsWith("START")){     // 문자열이 START로 시작하는지 확인
@@ -171,9 +194,15 @@ void loop() {
                 digitalWrite(7,LOW);
 
                 Serial.print("OK : ");          // 응답
-                Serial.println(Interval);    
+                Serial.println(Interval);   
 
                 SetTransmit(nrf24);
+
+                Packet_Send(nrf24,"TX_01","OK"); //STATION에 STOP문자열 전송 후 프로그램 종료
+
+                delay(1000);
+
+                digitalWrite(7,HIGH); //통신시작을 알리기 위해 LED HIGH
 
                 break;     
             }        
@@ -185,17 +214,29 @@ void loop() {
         sprintf(numStr,"%04d",PacketCount);
         String packet = "AAAAAAAAAAAAAAAAAAAAAAAAAAAA" + String(numStr);
         Serial.println(packet);
-        packet.toCharArray((char *)buf,32);
+        packet.toCharArray((char *)_buf,32);
 
-        Packet_Send(nrf24,"TX_01",buf);
+        Packet_Send(nrf24,"TX_01",_buf);
 
         PacketCount++;
 
         delay(Interval);
         
-        if(PacketCount == 1000){
-            NodeFlag = 1;
+        if(PacketCount == 1000) //1000번 전송했으면
+        {
+            sprintf((char *)_buf, "STOP"); 
+            Packet_Send(nrf24,"TX_01",_buf); //STATION에 STOP문자열 전송 후 LED BLINK
+            break;
+            
         }
+    }
+
+    while(1)
+    {
+        digitalWrite(7,LOW);
+        delay(500);
+        digitalWrite(7,HIGH);
+        delay(500);
     }
 #endif
 
