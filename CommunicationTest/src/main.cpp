@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <NRF24.h>
 
-#define INFOSTAT 0
-#define INFONODE 1
+#define INFOSTAT 1
+#define INFONODE 0
 #define INFOSTAT_DEBUG 0
 #define INFONODE_DEBUG 0
 
@@ -182,7 +182,7 @@ void loop() {
 
         //NODE 데이터 RECEIVE 시작
 
-        while(1){    
+        while(1){
             String NRFResult = (char *)Packet_Receive(nrf24,32);
             
             if(NRFResult.startsWith("STOP")){ // STOP이면 시리얼에 STOP출력 후 LED BLINK
@@ -211,6 +211,7 @@ void loop() {
 #endif
 
 #if INFONODE
+    
     while(1)
     {
         String NRFResult = (char *)Packet_Receive(nrf24,32);
@@ -249,7 +250,7 @@ void loop() {
     while(1){
         char numStr[4];
         sprintf(numStr,"%04d",PacketCount);
-        String packet = "AAAAAAAAAAAAAAAAAAAAAAAAAAAA" + String(numStr);
+        String packet = "AAAAAAAAAAAAAAAAAAAAAAAAAA" + String(numStr) + "\r\n";
         Serial.println(packet);
         packet.toCharArray((char *)_buf,32);
 
@@ -272,6 +273,8 @@ void loop() {
                 delay(500);
             }
 
+            SetReceive(nrf24);
+            PacketCount = 0;
             break;
             
         }
