@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include <NRF24.h>
 
-#define INFOSTAT 1
-#define INFONODE 0
+#define INFOSTAT 0
+#define INFONODE 1
+#define INFOSTAT_DEBUG 0
+#define INFONODE_DEBUG 0
 
 String StartTime;
 
@@ -22,16 +24,17 @@ int Packet_Send(NRF24 NrfName, const char * Pipe, uint8_t * Packet){
     if (!NrfName.setTransmitAddress((uint8_t*)Pipe, 5))
         return -2;
 
-    if (!NrfName.send(Packet, sizeof(Packet), true)) // NOACK, 110 microsecs
+    if (!NrfName.send(Packet, 32, true)) // NOACK, 110 microsecs
         return 0;
 
-    if (!NrfName.waitPacketSent())
+    if (NrfName.waitPacketSent())
         return -1;
 }
 
+uint8_t buf[32];
+
 uint8_t * Packet_Receive(NRF24 NrfName, uint8_t Payload){
-    uint8_t buf[Payload];
-    uint8_t len = sizeof(buf);
+    uint8_t len = Payload;
 
     NrfName.waitAvailable();
     if (NrfName.recv(buf, &len)) // 140 microsecs
@@ -46,7 +49,7 @@ uint8_t * Packet_Receive(NRF24 NrfName, uint8_t Payload){
 void SetReceive(NRF24 nrf){
     if (!nrf.init())
         Serial.println("NRF24_1 init failed");
-    if (!nrf.setChannel(2))
+    if (!nrf.setChannel(115))
         Serial.println("NRF24_1 setChannel failed");
     if (!nrf.setThisAddress((uint8_t*)"TX_01", 5))
         Serial.println("NRF24_1 setThisAddress failed");
@@ -56,7 +59,7 @@ void SetReceive(NRF24 nrf){
         Serial.println("NRF24_1 setRF failed");    
     if (!nrf.powerUpRx())
         Serial.println("NRF24_1 powerOnRx failed");    
-    Serial.println("NRF24_1 initialised");
+    Serial.println("SetReceive The End");
 }
 
 void SetTransmit(NRF24 nrf){
@@ -66,26 +69,34 @@ void SetTransmit(NRF24 nrf){
         Serial.println("setChannel failed");
     if (!nrf.setPayloadSize(32))
         Serial.println("setPayloadSize failed");
-    if (!nrf.setRF(NRF24::NRF24DataRate250kbps, NRF24::NRF24TransmitPower0dBm))
+    if (!nrf.setRF(NRF24::NRF24DataRate2Mbps, NRF24::NRF24TransmitPower0dBm))
         Serial.println("setRF failed");    
     nrf.spiWriteRegister(NRF24_REG_1D_FEATURE, NRF24_EN_DYN_ACK);
-    Serial.println("initialised");
+    Serial.println("SetTransmit The End");
 }
 
 void setup() {
     // put your setup code here, to run once:
-#if INFOSTAT
-    pinMode(7,OUTPUT);
-    
     Serial.begin(9600);
-    while (!Serial) ; 
+    while(!Serial) ;
+#if INFOSTAT_DEBUG
+    pinMode(5,OUTPUT);
+    
+    SetTransmit(nrf24);
+#endif
+#if INFONODE_DEBUG
+    pinMode(5,OUTPUT);
+    
+    SetReceive(nrf24);
+#endif
+#if INFOSTAT
+    pinMode(5,OUTPUT);
     
     SetTransmit(nrf24);
 #endif
 
 #if INFONODE
-    Serial.begin(9600);
-    while(!Serial) ;
+    pinMode(5,OUTPUT);
     
     SetReceive(nrf24);
 #endif
@@ -95,18 +106,20 @@ void loop() {
     // put your main code here, to run repeatedly:
     uint8_t _buf[32];
     int PacketCount = 0;
-
+    
 #if INFOSTAT
     if(Serial.available() > 0){                 // 버퍼가 찼는지 확인
+        
         byte str[32];                           // 버퍼에서 불러 온 값을 저장 할 배열
         Serial.readBytes(str,32);               // 버퍼값 불러오기
         
-        digitalWrite(7,LOW);
+        digitalWrite(5,LOW);
         
         String result = String((char*)str);     // 배열을 문자열 형태로 변형 (startsWith 함수 사용을 위해)
-        
+        Serial.println(result);
         if(result.startsWith("S")){             // 문자열이 S로 시작하는지 확인 ==> 처음부터 START를 찾으니 못 찾는 경우가 종종 있었다.
             if(result.startsWith("START")){     // 문자열이 START로 시작하는지 확인
+                Serial.println("rec");
                 char numStr[4];                 // 숫자만 저장할 배열
 
                 for(int i =0; i < 4; i++)       // 문자열에서 숫자부분 만 빼내서 저장
@@ -114,7 +127,7 @@ void loop() {
                 
                 Interval = atoi(numStr);        // 숫자 배열을 숫자로 변경하여 인터벌로 지정
 
-                digitalWrite(7,LOW);
+                digitalWrite(5,LOW);
 
                 Serial.print("OK : ");          // 응답
                 Serial.println(Interval);         
@@ -122,16 +135,23 @@ void loop() {
         }
         
         else if(result[0] == '2' && result[1] == '0'){
-            StartTime = result.substring(0,26);
+            StartTime = result.substring(0,22);
             Serial.print("OK : ");              // 응답
-            Serial.println(StartTime);    
-            StationFlag = 1;
-        }
-    }
-#endif
+            Serial.println(StartTime); 
 
-#if INFOSTAT
-    if(StationFlag == 1){
+            String str = String(StationFlag);
+            Serial.print("before : "); Serial.println(str);   
+            
+            StationFlag = 1;
+            str = String(StationFlag);
+            Serial.print("after : "); Serial.println(str);   
+        }
+        Serial.flush();
+    }
+    
+    if(StationFlag == 1)
+    {
+        Serial.println("Start Sensing");
         while(1)
         {
             SetTransmit(nrf24);
@@ -139,15 +159,22 @@ void loop() {
             char packet[] = "START : ";
             sprintf((char*)_buf,"%s%04d", packet, Interval);
             Serial.println((char*)_buf);
-            Packet_Send(nrf24,"TX_01",_buf);
-            
+
+            Serial.println("AAAAAA send start");  
+
+            for(int i = 0; i<5;i++)
+            {
+                Packet_Send(nrf24,"TX_01",_buf);
+                delay(100);
+            }
+            Serial.println("AAAAAA send end");            
             SetReceive(nrf24);
 
             String NRFResult = (char *)Packet_Receive(nrf24,32);
             if(NRFResult.startsWith("O")){          // 문자열이 O로 시작하는지 확인
                 if(NRFResult.startsWith("OK")){     // 문자열이 OK로 시작하는지 확인
-                    digitalWrite(7,HIGH);           //통신시작을 알리기 위해 LED HIGH
-                    Serial.print("OK : ");          // 응답
+                    digitalWrite(5,HIGH);           //통신시작을 알리기 위해 LED HIGH
+                    Serial.print("SENSOR TEST START : ");          // 응답
                     Serial.println(Interval);  
                      
                     break;     
@@ -161,7 +188,14 @@ void loop() {
             String NRFResult = (char *)Packet_Receive(nrf24,32);
             if(NRFResult.startsWith("STOP")){ // STOP이면 시리얼에 STOP출력 후 LED BLINK
                 Serial.println(NRFResult); 
-                
+                for(int i = 0; i < 5; i++)
+                {
+                    digitalWrite(5,LOW);
+                    delay(500);
+                    digitalWrite(5,HIGH);
+                    delay(500);
+                }
+                StationFlag=0;
                 break;
             }
             else if(NRFResult.startsWith("A")){
@@ -169,19 +203,13 @@ void loop() {
             }
         }
     }
-    while(1)
-    {
-        digitalWrite(7,LOW);
-        delay(500);
-        digitalWrite(7,HIGH);
-        delay(500);
-    }
 #endif
 
 #if INFONODE
     while(1)
     {
         String NRFResult = (char *)Packet_Receive(nrf24,32);
+        Serial.println(NRFResult);
         if(NRFResult.startsWith("S")){             // 문자열이 S로 시작하는지 확인 ==> 처음부터 START를 찾으니 못 찾는 경우가 종종 있었다.
             if(NRFResult.startsWith("START")){     // 문자열이 START로 시작하는지 확인
                 char numStr[4];                 // 숫자만 저장할 배열
@@ -191,18 +219,24 @@ void loop() {
                 
                 Interval = atoi(numStr);        // 숫자 배열을 숫자로 변경하여 인터벌로 지정
 
-                digitalWrite(7,LOW);
+                digitalWrite(5,LOW);
 
                 Serial.print("OK : ");          // 응답
                 Serial.println(Interval);   
 
                 SetTransmit(nrf24);
+Serial.println("AAAAAA send start");  
+                for(int i = 0; i<5;i++)
+                {
+                    Packet_Send(nrf24,"TX_01",(uint8_t *)"OK"); //STATION에 STOP문자열 전송 후 프로그램 종료
+                    delay(100);
+                }
 
-                Packet_Send(nrf24,"TX_01","OK"); //STATION에 STOP문자열 전송 후 프로그램 종료
+                Serial.println("AAAAAA send end");  
 
                 delay(1000);
 
-                digitalWrite(7,HIGH); //통신시작을 알리기 위해 LED HIGH
+                digitalWrite(5,HIGH); //통신시작을 알리기 위해 LED HIGH
 
                 break;     
             }        
@@ -226,18 +260,31 @@ void loop() {
         {
             sprintf((char *)_buf, "STOP"); 
             Packet_Send(nrf24,"TX_01",_buf); //STATION에 STOP문자열 전송 후 LED BLINK
+
+            for(int i = 0; i < 5; i++)
+            {
+                digitalWrite(7,LOW);
+                delay(500);
+                digitalWrite(7,HIGH);
+                delay(500);
+            }
+
             break;
             
         }
     }
-
-    while(1)
-    {
-        digitalWrite(7,LOW);
-        delay(500);
-        digitalWrite(7,HIGH);
-        delay(500);
-    }
 #endif
 
+#if INFOSTAT_DEBUG
+    uint8_t __buf[] = "NrfTest String Made in infoboss";
+    if(!Packet_Send(nrf24,"TX_01",__buf)) //STATION에 STOP문자열 전송 후 프로그램 종료
+        Serial.println("OK");
+    else
+        Serial.println("NOT OK");
+    delay(100);
+#endif
+#if INFONODE_DEBUG
+    String NRFResult = (char *)Packet_Receive(nrf24,32);
+    Serial.println(NRFResult);
+#endif
 }
