@@ -18,6 +18,7 @@ uint8_t NodeFlag = -1;
 
 #if INFOSTAT 
 uint8_t StationFlag = 0;
+uint8_t Received_Cnt = 0;
 #endif
 
 int Packet_Send(NRF24 NrfName, const char * Pipe, uint8_t * Packet){
@@ -160,14 +161,11 @@ void loop() {
             sprintf((char*)_buf,"%s%04d", packet, Interval);
             Serial.println((char*)_buf);
 
-            Serial.println("AAAAAA send start");  
-
             for(int i = 0; i<5;i++)
             {
                 Packet_Send(nrf24,"TX_01",_buf);
                 delay(100);
             }
-            Serial.println("AAAAAA send end");            
             SetReceive(nrf24);
 
             String NRFResult = (char *)Packet_Receive(nrf24,32);
@@ -186,8 +184,13 @@ void loop() {
 
         while(1){    
             String NRFResult = (char *)Packet_Receive(nrf24,32);
+            
             if(NRFResult.startsWith("STOP")){ // STOP이면 시리얼에 STOP출력 후 LED BLINK
-                Serial.println(NRFResult); 
+                char str[50];
+                sprintf(str, "NRF Test Is End Delay : %d, Average : %d / 1000\n", Interval, (int)Received_Cnt);
+                Serial.println(NRFResult);
+                Serial.println(str);
+                
                 for(int i = 0; i < 5; i++)
                 {
                     digitalWrite(5,LOW);
@@ -196,10 +199,12 @@ void loop() {
                     delay(500);
                 }
                 StationFlag=0;
+                Received_Cnt = 0;
                 break;
             }
             else if(NRFResult.startsWith("A")){
                 Serial.println(NRFResult);
+                Received_Cnt++;
             }
         }
     }
@@ -225,14 +230,12 @@ void loop() {
                 Serial.println(Interval);   
 
                 SetTransmit(nrf24);
-Serial.println("AAAAAA send start");  
                 for(int i = 0; i<5;i++)
                 {
                     Packet_Send(nrf24,"TX_01",(uint8_t *)"OK"); //STATION에 STOP문자열 전송 후 프로그램 종료
                     delay(100);
                 }
 
-                Serial.println("AAAAAA send end");  
 
                 delay(1000);
 
